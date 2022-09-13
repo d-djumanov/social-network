@@ -1,0 +1,15 @@
+<div  class="container-fluid" style="margin: 50px;">
+    
+    <input type="hidden" id="currentUserUID" value="{{currentUserId}}">
+     <input type="hidden" id="postId" value="{{post._id}}">
+    <div style="padding-top:40px; position: fixed; background-color: white;"><h3>{{post.body}}</h3></div>
+
+<div id="comments"></div> 
+
+        <form id="comment-form">
+        <input type="text" name="comment" id="comment" placeholder="Type your comment .." required>
+        <button id="comment-btn" type="submit">Share</button>
+        </form>
+
+
+</div>
