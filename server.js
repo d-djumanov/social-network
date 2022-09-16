@@ -65,11 +65,16 @@ app.set('view engine', 'handlebars');
 
 
 // SOCKET CONNECTION STARTS HERE
-
-
 io.on('connection',function(socket){
     /////////////////////////////SOCKET STARTS HERE////////
     console.log('Client is connected.');
+    ///// FIND CHAT MESSAGES AND EMIT
+Chat.find({})
+.then((chats) => {
+    socket.broadcast.emit('messages',chats);
+    socket.emit('messages',chats);
+}).catch(e => console.log(e))
+////////////////////////////////
     // listen disconnect event
     socket.on('disconnect',function(){
         console.log('Client has been disconnected.');
@@ -96,13 +101,7 @@ io.on('connection',function(socket){
        }
     })
 
-////////Find chat and emit
-    Chat.find({})
-    .then((chats) => {
-        socket.broadcast.emit('messages',chats);
-        socket.emit('messages',chats);
-    }).catch(e => console.log(e))
-    //////////////////////////////////
+
 
 ////////chat room users event
 socket.on('chatRoomUsers',(res) => {
@@ -167,7 +166,7 @@ socket.on('chatRoomUsers',(res) => {
             }
         })
     })
-    //////Create apost////////
+    ///// CREATE A POST
     socket.on('newPost',(post) => {
         console.log(post)
         User.findById({_id:post.currentUserId})
@@ -190,20 +189,21 @@ socket.on('chatRoomUsers',(res) => {
                     .then((posts) => {
                         socket.broadcast.emit('posts',posts)
                         socket.emit('posts',posts)
-                    }).catch(e => console.log(e.message))
+                    }).catch(e => console.log(e))
                 }
             })
-        }).catch(e => console.log(e.message))
+        })
+        .catch(e => console.log(e.message))
     })
 
-    //////emit all posts///////
+    /// emit all posts
     Post.find({})
     .then((posts) => {
         socket.broadcast.emit('posts',posts)
         socket.emit('posts',posts)
-    }).catch(e => console.log(e.message))
+    }).catch(e => console.log(e))
 
-    //listen to new comment event
+    // listen to new comment event
     socket.on('newComment',function(comment){
         console.log(comment)
         User.findById(comment.commentUserId)
@@ -220,31 +220,31 @@ socket.on('chatRoomUsers',(res) => {
                 post.save((err,post) => {
                     if (err) {
                         console.log(err)
-                        
                     }
                     if (post) {
                         console.log('Post comment has been saved..')
-                        socket.broadcast.emit('postComments',post)
-                        socket.emit('postComments',post)
+                        socket.broadcast.emit('postComments',post);
+                        socket.emit('postComments',post);
                     }
                 })
             })
         })
     })
-    // listen to post event //
+    // listen to post event
     socket.on('findThisPost',function(id){
         Post.findById(id)
         .then((post) => {
-            socket.broadcast.emit('postComments',post)
-            socket.emit('postComments',post)
+            socket.broadcast.emit('postComments',post);
+            socket.emit('postComments',post);
         }).catch(e => console.log(e))
     })
-    ///// Listen to addLike event//////////
-    socket.on('addLike',function(data){
-        console.log('Post data to add like -------',data);
+
+    // listen to addLike event
+    socket.on('addLike',function(data) {
+        console.log('POST DATA TO ADD LIKE --- ',data);
         User.findById(data.userID)
         .then((user) => {
-            console.log('USER FOUND --------', user);
+            console.log('USER FOUND --- ', user);
             Post.findById(data.postId)
             .then(post => {
                 post.likes.push(user)
@@ -253,12 +253,13 @@ socket.on('chatRoomUsers',(res) => {
                         console.log(err)
                     }
                     if (updatedPost) {
-                        console.log('UPDATED POST ---------',updatedPost);
+                        console.log('UPDATED POST ---- ',updatedPost);
                         Post.find({})
                         .then((posts) => {
+                            // emit updated posts
                             socket.broadcast.emit('posts',posts)
                             socket.emit('posts',posts)
-                        }).catch(e => console.log(e.message))
+                        }).catch(e => console.log(e))
                     }
                 })
             })
@@ -266,29 +267,26 @@ socket.on('chatRoomUsers',(res) => {
         })
         .catch(e => console.log(e))
     })
-    // Remove like
+
+    // REMOVE LIKE
     socket.on('removeLike',function(data){
         console.log('REMOVED ...');
         Post.findById(data.postId)
         .then((post) => {
-            User.findById(data.userID)
-            .then((user) => {
-                let readyToRemove = false
-                post.likes.forEach((like) => {
-                    if (like._id === user._id) {
-                        readyToRemove = true
-                    } else {
-                        readyToRemove = false
-                        
-                    }
-                })
-                if (readyToRemove) {
+                User.findById(data.userID)
+                .then((user) => {
                     post.likes.shift(user)
-                } else {
-                    console.log('Like has already been removed.')
-                }
-            }).catch(e => console.log(e.message))
-        }).catch(e => console.log(e))   
+               post.save()
+               .then(() => {
+                Post.find({})
+                    .then((posts) => {
+                        // emit updated posts
+                        socket.broadcast.emit('posts',posts)
+                        socket.emit('posts',posts)
+                    }).catch(e => console.log(e))
+               }).catch(e => console.log(e))
+                }).catch(e => console.log(e.message))
+        }).catch(e => console.log(e))
     })
     /////////////////SOCKET ENDS HERE//////////////////
 });
@@ -307,38 +305,35 @@ app.get('/forgotPassword',ensureGuest,(req,res) => {
 });
 // handle signup post request
 app.post('/signup',(req,res) => {
-    console.log('USER PASSWORD -- ',req.body.password)
-    User.findOne({email:req.body.email})
-    .then((user) => {
-        if (user) {
-            //////////account exists with email
-            res.render('Authentication/SignUp',{
-                errorMessage:'Email is already in use'
-            })
-        }else{
-            var salt = bcrypt.genSaltSync(10);
-            var hash = bcrypt.hashSync(req.body.password, salt);
-            console.log('ENCRYPTED PASSWORD',hash);
-        
-            let newUser = {
-                username:req.body.username,
-                email:req.body.email,
-                password:hash,
-                date:new Date(),
-                online:true
-            }
-            new User(newUser)
-            .save((error) => {
-                if (error) {
-                    throw error
-                }
-                res.render('home',{
-                    success:'Account has been created. You can login now.'
-                })
-            })
+   User.findOne({email:req.body.email})
+   .then((user) => {
+       if (user) {
+           ///// account exists with email
+           res.render('Authentication/Signup',{
+            errorMessage:'Email is already in use'
+        })
+       }else{
+        var salt = bcrypt.genSaltSync(10);
+        var hash = bcrypt.hashSync(req.body.password, salt);
+    
+        let newUser = {
+            username:req.body.username,
+            email:req.body.email,
+            password:hash,
+            date:new Date(),
+            online:true
         }
-    })
-   
+        new User(newUser)
+        .save((error) => {
+            if (error) {
+                throw error
+            }
+            res.render('home',{
+                success:'Account has been created. You can login now.'
+            })
+        })
+       }
+   })
 })
 // handle /login request
 app.post('/login',passport.authenticate('local',{
@@ -405,8 +400,8 @@ app.get('/chatRoom/:id',(req,res) => {
        if (chat) {
            User.findById({_id:req.params.id})
            .then((otherUser) => {
-            User.findById({_id:req.user._id})
-            .then((currentUser) => {
+               User.findById({_id:req.user._id})
+               .then((currentUser) => {
                 res.render('ChatRoom',{
                     otherUser,
                     chat,
@@ -414,8 +409,7 @@ app.get('/chatRoom/:id',(req,res) => {
                     title:'Chat Room',
                     currentUser
                 })
-            }).catch(e => console.log(e.message))
-               
+               }).catch(e => console.log(e.message))
            }).catch(e => console.log(e.message))
        }else{
            Chat.findOne({
@@ -426,16 +420,16 @@ app.get('/chatRoom/:id',(req,res) => {
                    User.findById({
                        _id:req.params.id
                    }).then((otherUser) => {
-                       User.findById({_id:req.user._id})
-                       .then((currentUser) => {
-                        res.render('ChatRoom',{
-                            otherUser,
-                            chat,
-                            currentUserId:req.user._id,
-                            title:'Chat Room',
-                            currentUser
-                        })
-                       }).catch(e => console.log(e.message))
+                    User.findById({_id:req.user._id})
+                    .then((currentUser) => {
+                     res.render('ChatRoom',{
+                         otherUser,
+                         chat,
+                         currentUserId:req.user._id,
+                         title:'Chat Room',
+                         currentUser
+                     })
+                    }).catch(e => console.log(e.message))
                    }).catch(e => console.log(e.message))
                }else{
                    /// create new chat /////
@@ -480,32 +474,30 @@ app.get('/chatRoom/:id',(req,res) => {
 app.get('/posts',(req,res) => {
     User.findById({_id:req.user._id})
     .then((currentUser) => {
-        res.render('Posts/Posts', {
+        res.render('Posts/Posts',{
             currentUser
         })
     }).catch(e => console.log(e.message))
-    
 })
-//Comments route
-
 app.get('/comments/:id',(req,res) => {
     Post.findById(req.params.id)
     .then((post) => {
-        res.render('Posts/Comments', {
+        res.render('Posts/Comments',{
             post,
             currentUserId:req.user._id
         })
     }).catch(e => console.log(e))
 })
-// Updated Post
+// UPDATE PASSWORD
 app.post('/updatePassword',(req,res) => {
     console.log(req.body)
     var salt = bcrypt.genSaltSync(10);
     var hash = bcrypt.hashSync(req.body.password, salt);
+
     User.findOneAndUpdate({email:req.body.email},{password:hash})
     .then((user) => {
         res.render('Authentication/ForgotPassword',{
-            success:'Update successful. You can login with new password. '
+            success:'Update successful. You can login with new password'
         })
     }).catch((e) => {
         res.render('Authentication/ForgotPassword',{
@@ -513,7 +505,6 @@ app.post('/updatePassword',(req,res) => {
         })
     })
 })
-
 // listen to port
 server.listen(port,function(error){
     if (error) {
